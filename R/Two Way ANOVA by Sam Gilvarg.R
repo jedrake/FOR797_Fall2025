@@ -43,11 +43,13 @@ hist(residuals(fullmodel))
 
 
 Anova(fullmodel, type = "II")
-
-
+anova(fullmodel) # notice that anova and Anova give slightly 
+                 # different results for the first main effect.
+                 # in this case it is not a meaningful difference.
+visreg(fullmodel,xvar="shape",by="season")
 
 marginal = emmeans(fullmodel, ~ shape * season)
-
+marginal
 CLD = cld(marginal, alpha = 0.05, Letters = letters, adjust = "sidak")
 CLD
 
