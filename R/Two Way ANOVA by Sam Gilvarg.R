@@ -28,15 +28,19 @@ normality_test <- shapiro.test(data$spp)
 variance_test <- leveneTest(spp ~ interaction(shape, season), data = data)
 
 
-plot(fullmodel, which = 2)
-hist(residuals(fullmodel))
-
 
 # fit model, assess normality of residuals
 fullmodel =lm(spp ~ shape * season, data = data)
 hist(fullmodel$residuals) # don't look too bad
 normality_test <- shapiro.test(fullmodel$residuals)
 normality_test # not statistically different than normal
+
+plot(fullmodel, which = 2) # plots the q-qplot
+plot(fullmodel, which = 3) # plots the scale location test
+
+hist(residuals(fullmodel))
+
+
 
 Anova(fullmodel, type = "II")
 
