@@ -1,10 +1,10 @@
-install.packages("car")
-install.packages("multcomp")
-install.packages("multcompView")
-install.packages("emmeans")
-install.packages("tidyr")
-install.packages("dplyr")
-install.packages("rstatix")
+# install.packages("car")
+# install.packages("multcomp")
+# install.packages("multcompView")
+# install.packages("emmeans")
+# install.packages("tidyr")
+# install.packages("dplyr")
+# install.packages("rstatix")
 
 library(car)
 library(multcomp)
@@ -14,7 +14,7 @@ library(tidyr)
 library(dplyr)
 library(rstatix)
 
-data <- read.csv("C:/Users/sgilv/Downloads/two-way-anova_data.csv")
+data <- read.csv("R/two-way-anova_data.csv")
 
 
 normality_test <- shapiro.test(data$spp)
