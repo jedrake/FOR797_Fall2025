@@ -1,4 +1,4 @@
-#* t tests: 1 and 2 sample by Amy Twohig 
+#* t tests: 1 and 2 sample by Amy Twohig   
 #* continuous quant variable: test for normality
 #* 
 #* 
