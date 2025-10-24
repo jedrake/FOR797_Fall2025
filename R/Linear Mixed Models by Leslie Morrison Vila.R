@@ -151,3 +151,4 @@ rmse_re
 # RMSE for predictions using only fixed effects
 rmse_fixed <- sqrt(mean((redpine_3$HT - redpine_3$HT_pred_fixed)^2, na.rm = TRUE))
 rmse_fixed
+
