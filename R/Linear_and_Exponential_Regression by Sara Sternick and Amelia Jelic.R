@@ -50,6 +50,8 @@ ggplot(exp_mixed_data,
 #fit the model
 model.growth_metric <- lm(log(growth_metric) ~ time, data = exp_mixed_data)
 summary(model.growth_metric)
+coef(model.growth_metric)
+
 
 #residuals
 ggplot(model.growth_metric, aes(x = .fitted, y = .resid)) +
