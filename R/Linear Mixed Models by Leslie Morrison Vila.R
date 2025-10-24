@@ -3,14 +3,22 @@ install.packages("remotes")
 remotes::install_github("mbrussell/stats4nr")
 install.packages("ggplot2")
 install.packages("plotly")
-#install.packages("lmerTest")
+
+#- the lme4 package doesn't do some things that most people need
+#  like p-values and r2 values. Here are some additional packages that 
+#   add these useful things
+install.packages("lmerTest")
+install.packages("LMERConvenienceFunctions")
+install.packages("MuMIn") # helps get conditional and marginal r2 values
 
 library(stats4nr)
 library(dplyr)
 library (lme4)
 library(ggplot2)
 library(plotly)
-#library(lmerTest)
+library(lmerTest)
+library(LMERConvenienceFunctions)
+library(MuMIn)
 
 ### Data characteristics
 str(redpine)
@@ -57,6 +65,11 @@ summary(model_1)
 qqnorm(residuals(model_1))
 qqline(residuals(model_1))
 plot(fitted(model_1), residuals(model_1))
+r.squaredGLMM(model_1) # outputs conditional and marginal r2 values
+  # R2m is the marginal r2 value reflecting the effects of fixed effects only
+  # R2c is the conditional r2 value reflecting BOTH fixed and random effects
+  #  comparing these helps us understand how much the model has been improved
+  #  by adding random effects.
 
 ### Function to extract the random effect terms from a mixed model
 ranef(model_1)
@@ -109,6 +122,7 @@ redpine %>%
 model_3 <- lmer(HT ~ DBH + (1 | CoverType/PlotNum),
                      data = redpine)
 summary(model_3)
+r.squaredGLMM(model_3) # outputs conditional and marginal r2 values. Marginal went way up
 
 ###  Testing for the significance of the models
 anova(model_1,model_2, model_3) # This compares models 2 and 3 against model 1
