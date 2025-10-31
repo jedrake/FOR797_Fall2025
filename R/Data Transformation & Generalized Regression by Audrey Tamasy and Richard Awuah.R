@@ -108,6 +108,29 @@ inverseestimates = 1 / coef(modelinverse)
 inverseestimates
 inverse_predictions = (1 / predict(modelinverse))
 
+
+
+
+###############################################################################
+# Added by John Drake- examples of how to find the "best" transformation.
+# As always... there is an R package for that!
+###############################################################################
+data(airquality)
+air <- na.omit(airquality)
+hist(air$Ozone) # not normal
+
+install.packages("bestNormalize")
+library(bestNormalize) # this package runs a bunch of transformations and 
+                       # helps you find the "best" transformation
+bestNormalize(air$Ozone) # suggests the Yeo-Johnson transformation
+air$Ozone_YJ <- predict(yeojohnson(air$Ozone))
+hist(air$Ozone_YJ) # much closer to normal!
+
+###############################################################################
+###############################################################################
+
+
+
 # Load dataset
 data("USJudgeRatings")
 df <- USJudgeRatings
