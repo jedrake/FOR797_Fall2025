@@ -11,7 +11,7 @@
 #Sorting and summarizing data before analysis
 
 #download csv from Github
-dirtydata <- read.csv("C:/Users/marci/Desktop/R seminar/FOR797_Fall2025/R/tree_sites_unclean.csv")
+dirtydata <- read.csv("R/tree_sites_unclean.csv")
 
 #make a copy of the data in case we mess up!
 dirtydata2 <- dirtydata

@@ -122,9 +122,13 @@ hist(air$Ozone) # not normal
 install.packages("bestNormalize")
 library(bestNormalize) # this package runs a bunch of transformations and 
                        # helps you find the "best" transformation
-bestNormalize(air$Ozone) # suggests the Yeo-Johnson transformation
+bestNormalize(air$Ozone) # suggests the Yeo-Johnson transformation, but log is close
+
 air$Ozone_YJ <- predict(yeojohnson(air$Ozone))
 hist(air$Ozone_YJ) # much closer to normal!
+
+air$Ozone_log <- log(air$Ozone)
+hist(air$Ozone_log) # much closer to normal, but still minor left skew
 
 ###############################################################################
 ###############################################################################
@@ -217,7 +221,7 @@ library(MuMIn)
 r.squaredGLMM(poisson_model)
 
 ##QQ plot
-deviance_residuals = residuals(poisson_model, type = "deviance")
+deviance_residuals = residuals(poisson_model,type="deviance")
 
 qqnorm(deviance_residuals)
 qqline(deviance_residuals)
