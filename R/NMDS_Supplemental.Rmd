@@ -1,0 +1,618 @@
+---
+title: "NMDS_Supplemental"
+author: "Danielle Sublett"
+date: "2025-11-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+```{r}
+library(vegan)
+library(ggplot2)
+library(pheatmap)
+library(gt)
+library(tidyr)
+library(dplyr)
+library(patchwork)
+```
+
+
+## Dissimilarity Matrix
+
+```{r}
+# Simple community matrix: rows = sites, columns = species
+comm <- data.frame(
+  Site  = c("A", "B", "C", "D"),
+  Sp1   = c(5, 0, 3, 0),
+  Sp2   = c(2, 1, 0, 4),
+  Sp3   = c(0, 3, 1, 2),
+  Sp4   = c(0, 0, 4, 5),
+  Sp5   = c(1, 2, 0, 0)
+)
+
+# Set row names to site names and remove the Site column
+rownames(comm) <- comm$Site
+comm <- comm[, -1]
+
+comm
+```
+```{r}
+# Calculate Bray–Curtis dissimilarities
+bray_dist <- vegdist(comm, method = "bray")
+
+# Convert to a full matrix for viewing / plotting
+bray_mat <- as.matrix(bray_dist)
+round(bray_mat, 3)
+```
+```{r}
+# Heatmap of Bray–Curtis dissimilarity
+pheatmap(
+  bray_mat,
+  clustering_method = "complete",
+  display_numbers   = TRUE,
+  number_format     = "%.2f",
+  main              = "Bray–Curtis Dissimilarity Between Sites",
+  angle_col         = 0
+)
+
+# Darker = more dissimilar
+# Diagonal = 0 (each site vs itself)
+# NMDS only sees this matrix of pairwise dissimilarities, not the original abundance table
+
+```
+
+```{r}
+set.seed(123)  # for reproducibility
+
+# Run NMDS using the dissimilarity matrix
+nmds <- metaMDS(bray_dist, k = 2, trymax = 100)
+
+nmds
+
+# Extract site scores (coordinates in NMDS space)
+nmds_scores <- as.data.frame(scores(nmds, display = "sites"))
+nmds_scores$Site <- rownames(nmds_scores)
+
+nmds_scores
+
+```
+
+```{r}
+ggplot(nmds_scores, aes(x = NMDS1, y = NMDS2, label = Site)) +
+  geom_point(size = 3) +
+  geom_text(vjust = -0.8) +
+  theme_minimal() +
+  labs(
+    title = "NMDS Ordination of Sites",
+    subtitle = "Distances between points reflect Bray–Curtis dissimilarities",
+    x = "NMDS1",
+    y = "NMDS2"
+  )
+
+```
+
+## Sorensen Coefficient 
+
+```{r}
+# Example presence/absence for 2 sites and 6 species
+pa <- data.frame(
+  Site   = c("A", "B"),
+  Sp1    = c(1, 1),
+  Sp2    = c(1, 0),
+  Sp3    = c(0, 1),
+  Sp4    = c(1, 1),
+  Sp5    = c(0, 1),
+  Sp6    = c(1, 0)
+)
+
+rownames(pa) <- pa$Site
+pa <- pa[, -1]
+
+pa
+
+# Compute Sørensen dissimilarity (vegan: Bray with binary = TRUE)
+sorensen <- vegdist(pa, method = "bray", binary = TRUE)
+sorensen
+# This is a *dissimilarity*, so Sørensen similarity = 1 - sorensen
+
+# --- Simple "Venn-style" visual with base R ---
+# Empty plot
+plot(c(0, 1), c(0, 1), type = "n", axes = FALSE, xlab = "", ylab = "",
+     main = "Sørensen: Shared vs Unique Species")
+
+# Two overlapping circles
+symbols(
+  x = c(0.45, 0.55),
+  y = c(0.5, 0.5),
+  circles = c(0.2, 0.2),
+  inches = FALSE,
+  add = TRUE,
+  fg = c("steelblue3", "tomato3"),
+  lwd = 3
+)
+
+text(0.35, 0.65, "Site A", col = "steelblue4")
+text(0.65, 0.65, "Site B", col = "tomato4")
+
+text(0.25, 0.5, "Unique\nA", col = "steelblue4")
+text(0.75, 0.5, "Unique\nB", col = "tomato4")
+text(0.50, 0.5, "Shared\nspecies", font = 2)
+
+text(0.5, 0.2,
+     labels = paste0("Sørensen dissimilarity ≈ ", round(as.numeric(sorensen), 2)),
+     cex = 0.9)
+
+```
+## Stress and Dimensions
+
+```{r}
+
+# number of sites (samples) in distance object
+n_sites <- attr(bray_dist, "Size")
+
+# k can range from 1 to n_sites - 1
+k_vals <- 1:(n_sites - 1)
+
+set.seed(123)  # reproducible stresses
+
+n_sites <- attr(bray_dist, "Size")
+k_vals  <- 1:(n_sites - 1)
+
+stress_vals <- sapply(k_vals, function(k) {
+  m <- metaMDS(bray_dist, k = k, trymax = 100, trace = 0)
+  m$stress
+})
+
+stress_df <- data.frame(
+  Dimensions = k_vals,
+  Stress     = stress_vals
+)
+
+
+ggplot(stress_df, aes(x = Dimensions, y = Stress)) +
+  geom_point(size = 3) +
+  geom_line() +
+  scale_x_continuous(breaks = k_vals) +
+  labs(
+    title = "Stress vs. Number of Dimensions",
+    x = "Number of dimensions (k)",
+    y = "Stress"
+  ) +
+  theme_minimal()
+
+
+```
+
+```{r}
+# Kruskal and Clark Stress Table values 
+
+table_data <- data.frame(
+  Stress_Range = c("<0.05", "<0.10", "<0.20", ">0.20",
+                   "<0.10", "0.10–0.20", "0.20–0.30", ">0.30"),
+  Interpretation = c("Excellent", "Good", "Fair", "Poor",
+                     "Good", "Usable", "Questionable", "Invalid"),
+  Rule_Set = c(rep("Kruskal (1964)", 4), rep("Clarke (1993)", 4))
+)
+
+gt(table_data) %>%
+  tab_header(
+    title = "Kruskal vs. Clarke Rules of Thumb for NMDS Stress"
+  ) %>%
+  cols_label(
+    Stress_Range = "Stress",
+    Interpretation = "Interpretation",
+    Rule_Set = "Rule Set"
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_row_groups()
+  )
+
+```
+
+```{r}
+# Stress Table Values Version 2
+
+# Data for both rule sets
+stress_rules <- data.frame(
+  Rule     = c("Kruskal", "Kruskal", "Kruskal", "Kruskal",
+               "Clarke",  "Clarke",  "Clarke",  "Clarke"),
+  Category = c("Excellent", "Good", "Fair", "Poor",
+               "Good", "Usable", "Questionable", "Invalid"),
+  x_start  = c(0.00, 0.05, 0.10, 0.20,
+               0.00, 0.10, 0.20, 0.30),
+  x_end    = c(0.05, 0.10, 0.20, 0.30,   # cap at 0.30 just for plotting
+               0.10, 0.20, 0.30, 0.35)   # 0.35 stands for "0.30+"
+)
+
+ggplot(stress_rules) +
+  geom_segment(
+    aes(x = x_start, xend = x_end,
+        y = Rule, yend = Rule,
+        colour = Category),
+    linewidth = 8, lineend = "butt"
+  ) +
+  scale_x_continuous(
+    limits = c(0, 0.35),
+    breaks = c(0, 0.05, 0.10, 0.20, 0.30),
+    labels = c("0", "0.05", "0.10", "0.20", "0.30+")
+  ) +
+  labs(
+    title = "Kruskal's vs. Clarke's Rules for NMDS Stress Interpretation",
+    x = "Stress",
+    y = ""
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    panel.grid.major.y = element_blank()
+  )
+
+```
+
+## Rank Order vs Distance
+
+```{r}
+
+# Simple sxample: three pairwise dissimilarities from some distance matrix
+rank_df <- data.frame(
+  Pair      = c("A–B", "A–C", "A–D"),
+  Original  = c(1.0, 2.5, 5.0),   # original dissimilarities
+  Ordination = c(0.8, 1.6, 3.2)   # distances in NMDS space
+)
+
+rank_long <- rank_df |>
+  pivot_longer(cols = c(Original, Ordination),
+               names_to = "Space",
+               values_to = "Distance")
+
+ggplot(rank_long, aes(y = Pair)) +
+  geom_segment(aes(x = 0, xend = Distance),
+               linewidth = 3) +
+  geom_point(aes(x = Distance), size = 3) +
+  facet_wrap(~ Space, nrow = 1, scales = "free_x") +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.1))) +
+  labs(
+    title = "NMDS preserves rank order, not exact distances",
+    x = "Distance",
+    y = "Pair of samples"
+  ) +
+  theme_minimal() +
+  theme(axis.text.y = element_text(face = "bold"))
+
+```
+
+
+```{r}
+
+# Original vs log-transformed distances
+
+# Simple set of dissimilarities
+dist_vals <- c(0.5, 1, 2, 3, 5, 8)
+
+df_dist <- data.frame(
+  Rank      = rank(dist_vals, ties.method = "first"),
+  Original  = dist_vals,
+  LogTrans  = log(dist_vals)
+)
+
+# Panel A: original distances vs rank
+p1 <- ggplot(df_dist, aes(x = Original, y = Rank)) +
+  geom_point(size = 3) +
+  geom_line() +
+  scale_y_reverse(breaks = 1:6) +  # rank 1 at top
+  labs(
+    title = "Original distances",
+    x = "Distance",
+    y = "Rank (1 = closest pair)"
+  ) +
+  theme_minimal()
+
+# Panel B: log-transformed distances vs rank
+p2 <- ggplot(df_dist, aes(x = LogTrans, y = Rank)) +
+  geom_point(size = 3) +
+  geom_line() +
+  scale_y_reverse(breaks = 1:6) +
+  labs(
+    title = "Log-transformed distances",
+    x = "log(Distance)",
+    y = "Rank (same order)"
+  ) +
+  theme_minimal()
+
+# NMDS ordination 
+
+# Tiny example community matrix: sites x species
+comm <- data.frame(
+  Site = c("A","B","C","D"),
+  Sp1  = c(5, 0, 3, 0),
+  Sp2  = c(2, 1, 0, 4),
+  Sp3  = c(0, 3, 1, 2),
+  Sp4  = c(0, 0, 4, 5)
+)
+rownames(comm) <- comm$Site
+comm <- comm[,-1]
+
+# Bray–Curtis dissimilarity and NMDS
+bray_dist <- vegdist(comm, method = "bray")
+set.seed(123)
+nmds <- metaMDS(bray_dist, k = 2, trymax = 100)
+
+nmds_scores <- as.data.frame(scores(nmds, display = "sites"))
+nmds_scores$Site <- rownames(nmds_scores)
+
+p3 <- ggplot(nmds_scores, aes(x = NMDS1, y = NMDS2, label = Site)) +
+  geom_point(size = 3) +
+  geom_text(vjust = -0.7) +
+  labs(
+    title = "NMDS ordination",
+    subtitle = "Uses ranks of dissimilarities, not raw values",
+    x = "NMDS1",
+    y = "NMDS2"
+  ) +
+  theme_minimal()
+
+# Combine panels 
+
+(p1 | p2 | p3)
+
+```
+## Choosing the best NMDS
+
+```{r}
+# Step 1 – Stress vs. number of dimensions (k) - see earlier plot above
+
+# Step 2 - Kruskal vs. Clarke stress thresholds - see above 
+
+# Step 3 - Monte Carlo test: real vs randomized stresses
+
+set.seed(123)
+
+# real NMDS (assuming bray_dist is from your real comm)
+nmds_real <- metaMDS(bray_dist, k = 2, trymax = 100, trace = 0)
+real_stress <- nmds_real$stress
+
+# function to randomize community data (shuffle species within sites)
+randomize_comm <- function(x) {
+  apply(x, 2, sample)  # permute abundances within each species column
+}
+
+# run NMDS on randomized data many times
+n_perm <- 50  # bump to 99/199 if you want
+rand_stress <- replicate(n_perm, {
+  comm_rand   <- randomize_comm(comm)
+  dist_rand   <- vegdist(comm_rand, method = "bray")
+  metaMDS(dist_rand, k = 2, trymax = 50, trace = 0)$stress
+})
+
+mc_df <- data.frame(Stress = rand_stress)
+
+ggplot(mc_df, aes(x = Stress)) +
+  geom_histogram(bins = 15, fill = "grey80", colour = "grey40") +
+  geom_vline(xintercept = real_stress, colour = "red", linewidth = 1) +
+  annotate("text",
+           x = real_stress, y = Inf,
+           label = paste0("Real stress = ", round(real_stress, 3)),
+           vjust = 1.5, hjust = -0.1, colour = "red") +
+  labs(
+    title = "Monte Carlo Test: Real vs. Randomized NMDS Stress",
+    x = "Stress from randomized communities",
+    y = "Count"
+  ) +
+  theme_minimal()
+
+# In this very small sample dataset, both the real and randomized NMDS runs produce stress values near zero. This happens because NMDS can perfectly represent distances among very small numbers of samples in two dimensions. Therefore, the Monte Carlo test is inconclusive — it cannot distinguish real structure from random noise in such a small dataset.
+
+```
+
+```{r}
+# Let's try with a larger dataset
+
+set.seed(123)
+
+## 1. Simulate community data with structure 
+
+n_sites   <- 30   # number of sites
+n_species <- 40   # number of species
+
+# Two habitat types (15 sites each)
+habitat <- factor(rep(c("A", "B"), each = n_sites/2))
+
+# Species means differ by habitat to create real structure
+# Species 1–20 prefer habitat A, 21–40 prefer habitat B
+lambda_A <- c(rep(5, 20), rep(1, 20))   # higher abundance for spp 1–20
+lambda_B <- c(rep(1, 20), rep(5, 20))   # higher abundance for spp 21–40
+
+comm <- matrix(NA, nrow = n_sites, ncol = n_species)
+for (i in 1:n_sites) {
+  if (habitat[i] == "A") {
+    comm[i, ] <- rpois(n_species, lambda_A)
+  } else {
+    comm[i, ] <- rpois(n_species, lambda_B)
+  }
+}
+
+rownames(comm) <- paste0("Site", 1:n_sites)
+colnames(comm) <- paste0("Sp", 1:n_species)
+
+# Remove any all-zero species (just in case)
+comm <- comm[, colSums(comm) > 0]
+
+## 2. Real NMDS 
+
+bray_real <- vegdist(comm, method = "bray")
+nmds_real <- metaMDS(bray_real, k = 2, trymax = 100, trace = 0)
+real_stress <- nmds_real$stress
+real_stress
+#> real stress value
+
+## 3. Randomize communities and compute null stresses
+
+randomize_comm <- function(x) {
+  # permute abundances within each species (column),
+  # preserving species totals but breaking site structure
+  apply(x, 2, sample)
+}
+
+n_perm <- 99  # number of randomizations
+
+rand_stress <- replicate(n_perm, {
+  comm_rand <- randomize_comm(comm)
+  dist_rand <- vegdist(comm_rand, method = "bray")
+  metaMDS(dist_rand, k = 2, trymax = 50, trace = 0)$stress
+})
+
+mc_df <- data.frame(Stress = rand_stress)
+
+## 4. Plot Monte Carlo result
+
+ggplot(mc_df, aes(x = Stress)) +
+  geom_histogram(bins = 15, fill = "grey80", colour = "grey40") +
+  geom_vline(xintercept = real_stress, colour = "red", linewidth = 1) +
+  annotate(
+    "text",
+    x = real_stress,
+    y = Inf,
+    label = paste0("Real stress = ", round(real_stress, 3)),
+    vjust = 1.5,
+    hjust = -0.1,
+    colour = "red"
+  ) +
+  labs(
+    title = "Monte Carlo Test: Real vs. Randomized NMDS Stress",
+    x = "Stress from randomized communities",
+    y = "Count"
+  ) +
+  theme_minimal()
+
+## 5. Monte Carlo p-value and summary 
+
+# one-sided p-value: how often is randomized stress <= real stress?
+p_val <- (sum(rand_stress <= real_stress) + 1) / (length(rand_stress) + 1)
+p_val
+
+```
+
+```{r}
+# Step 4 Stable vs. unstable solutions (stress vs iteration)
+
+iter_df <- data.frame(
+  Iteration = rep(1:10, 2),
+  Stress    = c(
+    # Stable: smooth drop then plateau
+    seq(0.30, 0.12, length.out = 6),
+    rep(0.12, 4),
+    # Unstable: noisy, doesn’t settle
+    0.35, 0.28, 0.32, 0.27, 0.31,
+    0.29, 0.30, 0.28, 0.31, 0.29
+  ),
+  Type      = rep(c("Stable solution", "Unstable solution"), each = 10)
+)
+
+ggplot(iter_df, aes(x = Iteration, y = Stress)) +
+  geom_line() +
+  geom_point(size = 2) +
+  facet_wrap(~ Type, nrow = 1) +
+  labs(
+    title = "Stress vs Iteration: Stable vs Unstable NMDS Solutions",
+    x = "Iteration number",
+    y = "Stress"
+  ) +
+  theme_minimal()
+
+```
+
+
+## Interpreting the Plot
+
+```{r}
+
+set.seed(123)
+
+df <- data.frame(
+  NMDS1 = c(rnorm(10, 0, 0.3), rnorm(10, 3, 0.3), rnorm(10, -3, 0.3)),
+  NMDS2 = c(rnorm(10, 0, 0.3), rnorm(10, 1, 0.3), rnorm(10, -1, 0.3)),
+  group = rep(c("Group A", "Group B", "Group C"), each = 10)
+)
+
+ggplot(df, aes(NMDS1, NMDS2, color = group)) +
+  geom_point(size = 3) +
+  theme_minimal() +
+  labs(title = "Interpreting an NMDS ordination",
+       subtitle = "Points close together = similar; far apart = dissimilar")
+
+```
+
+```{r}
+
+df_tri <- data.frame(
+  sample = c("A", "B", "C"),
+  x = c(0,   0.7, 2.0),
+  y = c(0,   0,   1.2)
+)
+
+# Check distances: 
+# AB = 0.7   (small)
+# AC = sqrt(2^2 + 1.2^2)  ≈ 2.33 (large)
+# BC = sqrt(1.3^2 + 1.2^2) ≈ 1.77 (medium)
+
+ggplot(df_tri, aes(x, y, label = sample)) +
+  geom_point(size = 5) +
+  geom_text(vjust = -1, size = 6) +
+  
+  # A–B: small distance
+  geom_segment(aes(x = 0,   y = 0,
+                   xend = 0.7, yend = 0),
+               linetype = 2) +
+  # A–C: large distance
+  geom_segment(aes(x = 0,   y = 0,
+                   xend = 2.0, yend = 1.2),
+               linetype = 2) +
+  # B–C: medium distance
+  geom_segment(aes(x = 0.7, y = 0,
+                   xend = 2.0, yend = 1.2),
+               linetype = 2) +
+  
+  annotate("text", x = 0.35, y = -0.15,
+           label = "Small distance = similar", size = 4) +
+  annotate("text", x = 1.3, y = 0.3,
+           label = "Medium distance", size = 4) +
+  annotate("text", x = 1.2, y = 1.0,
+           label = "Large distance = dissimilar", size = 4) +
+  
+  coord_equal() +             # ensure x and y units are equal
+  theme_void() +
+  labs(title = "Ordination coordinates and distances")
+
+```
+## PERMANOVA - Code for Reference Only 
+
+```{r}
+# This code is just an example reference. (There is no otu_table so it won't run.)
+
+# 1. Calculate community dissimilarity matrix (Bray–Curtis is common for abundance data)
+dist_mat <- vegdist(otu_table, method = "bray")
+
+# 2. PERMANOVA: test whether groups differ in community composition
+#    'group_var' is a factor in your metadata (e.g., host species or elevation)
+permanova_result <- adonis2(dist_mat ~ group_var, data = metadata)
+print(permanova_result)
+# → p-value tells you whether groups differ in multivariate space
+
+# 3. Test for homogeneity of dispersion (beta-dispersion)
+#    This checks whether groups have similar within-group variability
+dispersion <- betadisper(dist_mat, metadata$group_var)
+disp_test <- permutest(dispersion)
+print(disp_test)
+# → p-value indicates whether dispersion differs among groups
+
+# 4. (Optional) Plot NMDS
+nmds <- metaMDS(dist_mat, k = 2)
+plot(nmds)
+
+```
+
